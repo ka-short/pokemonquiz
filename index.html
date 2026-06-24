@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dual Type Pokémon Quiz</title>
+  <link rel="preconnect" href="https://pokeapi.co" />
+  <link rel="preconnect" href="https://raw.githubusercontent.com" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Loading overlay -->
+  <div id="loader" class="loader">
+    <div class="pokeball"></div>
+    <p id="loader-text">Loading Pokémon data…</p>
+  </div>
+
+  <header class="topbar">
+    <h1>Dual&nbsp;Type Quiz</h1>
+    <div class="streaks">
+      <div class="streak-box">
+        <span class="streak-num" id="streak">0</span>
+        <span class="streak-label">Streak</span>
+      </div>
+      <div class="streak-box best">
+        <span class="streak-num" id="best">0</span>
+        <span class="streak-label">Best</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="game">
+      <p class="prompt">Name a Pokémon that is <strong>both</strong> of these types:</p>
+
+      <div class="types" id="types"></div>
+
+      <div class="input-wrap">
+        <input
+          id="guess"
+          type="text"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="Type a Pokémon name…"
+        />
+        <ul id="suggestions" class="suggestions" hidden></ul>
+      </div>
+
+      <div class="buttons">
+        <button id="submit" class="btn primary">Guess</button>
+        <button id="skip" class="btn ghost">Skip</button>
+        <button id="giveup" class="btn ghost">Give&nbsp;up</button>
+      </div>
+
+      <div id="feedback" class="feedback"></div>
+    </section>
+
+    <aside class="sidebar">
+      <h2>Wrong guesses</h2>
+      <p class="sidebar-hint" id="sidebar-hint">Miss a guess and its real typing shows up here.</p>
+      <div id="wrong-list" class="wrong-list"></div>
+    </aside>
+  </main>
+
+  <footer class="credit">
+    Data &amp; sprites from <a href="https://pokeapi.co" target="_blank" rel="noopener">PokéAPI</a>.
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

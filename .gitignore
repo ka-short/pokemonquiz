@@ -1,0 +1,11 @@
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.log
+
+# Editor folders
+.vscode/
+.idea/
+
+# Claude Code local config
+.claude/
