@@ -30,12 +30,17 @@
   let picks = { host: null, guest: null };
   let myPick = null;
   let round = null;         // { types:[...], answers:Set, resolved:bool }
+  let connOpened = false;   // guards the one-time conn "open" handshake
 
   // app.js tells us the Pokémon indexes are ready.
   window.onDataReady = function () {
     dataReady = true;
     refreshLobbyStart();
   };
+  // On the cached path, app.js may have already finished and called
+  // onDataReady in the microtask gap before this script ran, so its call hit
+  // an undefined hook and was lost. Pick up the flag it left behind.
+  if (window.pkmnDataReady) { dataReady = true; }
 
   // expose the only hook app.js needs
   window.Duel = { submit: duelSubmit };
@@ -157,19 +162,24 @@
 
   /* ---------------- connection wiring ---------------- */
   function wireConn() {
+    connOpened = false;
     conn.on("open", onConnOpen);
     conn.on("data", onConnData);
     conn.on("close", opponentLeft);
     conn.on("error", () => opponentLeft());
+    // PeerJS may have already fired "open" before we attached the listener.
+    if (conn.open) onConnOpen();
   }
   function onConnOpen() {
+    if (connOpened) return; // run the handshake exactly once
+    connOpened = true;
     if (role === "host") {
       send({ type: "config", mode, target, scores });
       send({ type: "hello", name: myName });
-      refreshLobbyStart();
     } else {
       send({ type: "hello", name: myName });
     }
+    refreshLobbyStart();
   }
   function onConnData(msg) {
     if (!msg || !msg.type) return;
@@ -185,7 +195,7 @@
         refreshLobbyStart();
         break;
       case "pick":
-        picks.guest = msg.type;
+        picks.guest = msg.pick;
         if (picks.host) checkBothPicks();
         else setMsg("pick-status", "Opponent locked in — your turn!");
         break;
@@ -245,11 +255,18 @@
   function refreshLobbyStart() {
     if (role !== "host") return;
     const btn = byId("lobby-start");
-    if (btn) btn.disabled = !(conn && conn.open && dataReady);
+    if (!btn) return;
+    const connected = conn && conn.open;
+    const ready = connected && dataReady;
+    btn.disabled = !ready;
+    if (ready) setMsg("lobby-msg", "Ready! Press Start.");
+    else if (connected && !dataReady) setMsg("lobby-msg", "Loading Pokémon data…");
+    else setMsg("lobby-msg", "Waiting for a friend to join…");
   }
 
   // Host starts (or restarts for a rematch): reset score and send everyone to pick.
   function startMatch() {
+    if (!(conn && conn.open)) { setMsg("lobby-msg", "Lost connection to opponent."); return; }
     scores = { host: 0, guest: 0 };
     send({ type: "start", scores });
     enterPick();
@@ -299,7 +316,7 @@
     lock.disabled = true; lock.textContent = "Locked";
     setMsg("pick-status", "Locked in — waiting for opponent…");
     if (role === "host") { picks.host = myPick; checkBothPicks(); }
-    else { send({ type: "pick", type: myPick }); }
+    else { send({ type: "pick", pick: myPick }); }
   }
 
   // HOST ONLY: both picks are in — validate the combined typing.
@@ -533,6 +550,7 @@
     try { if (peer) peer.destroy(); } catch (e) {}
     conn = null; peer = null; role = null;
     round = null; picks = { host: null, guest: null }; myPick = null;
+    connOpened = false;
     answered = false;
   }
 

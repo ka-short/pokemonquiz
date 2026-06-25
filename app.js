@@ -63,7 +63,8 @@ let nameDisplay = {};     // canonical name -> pretty display label
 let searchItems = [];     // [{ name, display, id, types, keys }] for autocomplete
 let combos = {};          // "typeA|typeB" -> [names]
 let monos = {};           // type -> [names] for pure single-type Pokémon
-let comboKeys = [];       // playable combo keys
+let comboKeys = [];       // playable dual-type combo keys
+let monoKeys = [];        // playable pure single-type keys (for solo mono rounds)
 let current = null;       // { types: [a,b], answers: Set }
 let answered = false;     // locked until "Next"
 let activeSuggestion = -1;
@@ -191,6 +192,7 @@ function buildIndexes() {
     }
   }
   comboKeys = Object.keys(combos).filter((k) => combos[k].length >= MIN_ANSWERS);
+  monoKeys = Object.keys(monos).filter((t) => monos[t].length >= MIN_ANSWERS);
 }
 
 // Pokémon whose typing is exactly {a, b} — or exactly {a} when a === b (pure mono).
@@ -237,14 +239,36 @@ function renderTypes(container, types) {
     card.append(img, label);
     container.appendChild(card);
   });
+} 
+
+// Roughly 1 in 4 solo rounds is a pure single-type ("mono") challenge.
+const MONO_CHANCE = 0.10;
+
+// Swap the solo prompt between the dual-type and pure single-type wording.
+function setSoloPrompt(types) {
+  const el = document.querySelector("#screen-solo .prompt");
+  if (!el) return;
+  el.innerHTML = types.length === 1
+    ? `Name a Pokémon that is <strong>purely</strong> this type:`
+    : `Name a Pokémon that is <strong>both</strong> of these types:`;
 }
 
 function newChallenge() {
   answered = false;
-  const key = comboKeys[Math.floor(Math.random() * comboKeys.length)];
-  const types = key.split("|");
-  current = { types, answers: new Set(combos[key]) };
 
+  let types, answers;
+  if (monoKeys.length && Math.random() < MONO_CHANCE) {
+    const t = monoKeys[Math.floor(Math.random() * monoKeys.length)];
+    types = [t];
+    answers = new Set(monos[t]);
+  } else {
+    const key = comboKeys[Math.floor(Math.random() * comboKeys.length)];
+    types = key.split("|");
+    answers = new Set(combos[key]);
+  }
+  current = { types, answers };
+
+  setSoloPrompt(types);
   renderTypes($("types"), types);
 
   // reset input
@@ -330,7 +354,10 @@ function onWrong(name) {
   streak = 0;
   setStreak(0);
   addWrongCard(name);
-  showInline(`${nameDisplay[name]} isn't both of those types. Try again!`, true);
+  const msg = current.types.length === 1
+    ? `${nameDisplay[name]} isn't a pure ${titleCase(current.types[0])} type. Try again!`
+    : `${nameDisplay[name]} isn't both of those types. Try again!`;
+  showInline(msg, true);
 }
 
 function showInline(msg, bad = true) {
@@ -547,6 +574,10 @@ function attachEvents() {
     newChallenge();
     $("loader").classList.add("hide");
     // Let the multiplayer module know the Pokémon indexes are ready.
+    // Leave a flag too: on the cached path this callback can fire in the
+    // microtask gap *before* multiplayer.js has run and defined onDataReady,
+    // so the flag lets that script catch up when it loads.
+    window.pkmnDataReady = true;
     window.onDataReady?.();
   } catch (err) {
     $("loader-text").textContent = "Couldn't load Pokémon data. Check your connection and refresh.";
