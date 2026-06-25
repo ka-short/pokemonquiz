@@ -1,13 +1,4 @@
-/* ===================================================================
-   Type Duel — 2-player real-time mode (PeerJS, host-authoritative).
-
-   Loaded AFTER app.js, so it reads app.js's script-scope globals directly:
-   showScreen, newChallenge, renderTypes, answersFor, resolveName, isCorrect,
-   hideSuggestions, showPopup, hidePopup, SPRITE, TYPE_NAMES, TYPE_COLORS,
-   TYPE_IMG, shade, titleCase, nameDisplay, pokemonId, and the mutable globals
-   `answered` and `gameMode`. The host owns all game state and arbitrates the
-   "first correct answer"; the guest sends actions and renders broadcast state.
-   =================================================================== */
+/* Type Duel — 2-player real-time mode (PeerJS, host-authoritative). */
 (function () {
   "use strict";
 
@@ -38,8 +29,6 @@
     refreshLobbyStart();
   };
   // On the cached path, app.js may have already finished and called
-  // onDataReady in the microtask gap before this script ran, so its call hit
-  // an undefined hook and was lost. Pick up the flag it left behind.
   if (window.pkmnDataReady) { dataReady = true; }
 
   // expose the only hook app.js needs
@@ -167,11 +156,10 @@
     conn.on("data", onConnData);
     conn.on("close", opponentLeft);
     conn.on("error", () => opponentLeft());
-    // PeerJS may have already fired "open" before we attached the listener.
     if (conn.open) onConnOpen();
   }
   function onConnOpen() {
-    if (connOpened) return; // run the handshake exactly once
+    if (connOpened) return; // run it exactly once
     connOpened = true;
     if (role === "host") {
       send({ type: "config", mode, target, scores });

@@ -46,6 +46,35 @@ const NOTABLE_FORMS = new Set([
   "zacian-crowned", "zamazenta-crowned",
 ]);
 
+// National-dex id ranges per generation. Used to tag each base species.
+const GEN_RANGES = [
+  [1, 1, 151], [2, 152, 251], [3, 252, 386], [4, 387, 493],
+  [5, 494, 649], [6, 650, 721], [7, 722, 809], [8, 810, 905],
+  [9, 906, 1025],
+];
+const ALL_GENS = GEN_RANGES.map((g) => g[0]);
+
+function genFromDex(id) {
+  for (const [g, lo, hi] of GEN_RANGES) if (id >= lo && id <= hi) return g;
+  return null;
+}
+
+// Generation a Pokémon (or form) belongs to.
+function genOf(name, id) {
+  if (id < 10000) return genFromDex(id);
+  const parts = name.split("-");
+  if (parts.includes("mega") || parts.includes("primal")) return 6;
+  if (parts.includes("alola")) return 7;
+  if (parts.includes("galar") || parts.includes("hisui")) return 8;
+  if (parts.includes("paldea")) return 9;
+
+  for (let len = parts.length - 1; len >= 1; len--) {
+    const bid = baseSpeciesId[parts.slice(0, len).join("-")];
+    if (bid) return genFromDex(bid);
+  }
+  return genFromDex(id);
+}
+
 function isIncluded(name, id) {
   if (id < 10000) return true;              // base species
   if (name.includes("totem")) return false; 
@@ -58,6 +87,9 @@ function isIncluded(name, id) {
 /* ====== State ====== */
 let pokemonToTypes = {};  // name -> [type, type]
 let pokemonId = {};       // name -> dex id
+let pokemonGen = {};      // name -> generation number (1..9)
+let baseSpeciesId = {};   // base species name -> dex id (id < 10000), for gen lookup
+let selectedGens = null;  // Set of enabled gens, or null = all gens
 let simpleToName = {};    // normalized alias -> canonical name
 let nameDisplay = {};     // canonical name -> pretty display label
 let searchItems = [];     // [{ name, display, id, types, keys }] for autocomplete
@@ -166,6 +198,16 @@ function buildIndexes() {
   nameDisplay = {};
   searchItems = [];
 
+  // Base species lookup (id < 10000)
+  baseSpeciesId = {};
+  for (const [n, id] of Object.entries(pokemonId)) {
+    if (id < 10000) baseSpeciesId[n] = id;
+  }
+  pokemonGen = {};
+  for (const [n, id] of Object.entries(pokemonId)) {
+    pokemonGen[n] = genOf(n, id);
+  }
+
   Object.keys(pokemonToTypes).sort().forEach((n) => {
     const display = displayName(n);
     nameDisplay[n] = display;
@@ -191,8 +233,79 @@ function buildIndexes() {
       (combos[key] = combos[key] || []).push(name);
     }
   }
-  comboKeys = Object.keys(combos).filter((k) => combos[k].length >= MIN_ANSWERS);
-  monoKeys = Object.keys(monos).filter((t) => monos[t].length >= MIN_ANSWERS);
+  rebuildPlayable();
+}
+
+// `name` is allowed by the current generation filter.
+function inGen(name) {
+  return !selectedGens || selectedGens.has(pokemonGen[name]);
+}
+
+//which combos/monos are playable under the active generation filter.
+function rebuildPlayable() {
+  comboKeys = Object.keys(combos)
+    .filter((k) => combos[k].filter(inGen).length >= MIN_ANSWERS);
+  monoKeys = Object.keys(monos)
+    .filter((t) => monos[t].filter(inGen).length >= MIN_ANSWERS);
+}
+
+/* ====== Generation filter ====== */
+const GEN_KEY = "pkmn-gens";
+
+function loadGens() {
+  try {
+    const raw = localStorage.getItem(GEN_KEY);
+    if (!raw) return null; // null = all generations
+    const arr = JSON.parse(raw).filter((g) => ALL_GENS.includes(g));
+    return arr.length ? new Set(arr) : null;
+  } catch {
+    return null;
+  }
+}
+function saveGens() {
+  try {
+    if (selectedGens) localStorage.setItem(GEN_KEY, JSON.stringify([...selectedGens]));
+    else localStorage.removeItem(GEN_KEY);
+  } catch { /* storage disabled — fine */ }
+}
+
+// Toggle one generation on/off, then rebuild and start a fresh challenge.
+function toggleGen(g) {
+  const set = new Set(selectedGens || ALL_GENS);
+  if (set.has(g)) set.delete(g); else set.add(g);
+  selectedGens = (set.size === 0 || set.size === ALL_GENS.length) ? null : set;
+  saveGens();
+  rebuildPlayable();
+  renderGenToggle();
+  newChallenge();
+}
+
+function renderGenToggle() {
+  const wrap = $("gen-toggle");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+  ALL_GENS.forEach((g) => {
+    const on = !selectedGens || selectedGens.has(g);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "gen-chip" + (on ? " on" : "");
+    btn.textContent = "Gen " + g;
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+    btn.onclick = () => toggleGen(g);
+    wrap.appendChild(btn);
+  });
+  const all = document.createElement("button");
+  all.type = "button";
+  all.className = "gen-chip all" + (selectedGens ? "" : " on");
+  all.textContent = "All";
+  all.onclick = () => {
+    selectedGens = null;
+    saveGens();
+    rebuildPlayable();
+    renderGenToggle();
+    newChallenge();
+  };
+  wrap.appendChild(all);
 }
 
 // Pokémon whose typing is exactly {a, b} — or exactly {a} when a === b (pure mono).
@@ -241,7 +354,7 @@ function renderTypes(container, types) {
   });
 } 
 
-// Roughly 1 in 4 solo rounds is a pure single-type ("mono") challenge.
+// mono typing chance
 const MONO_CHANCE = 0.10;
 
 // Swap the solo prompt between the dual-type and pure single-type wording.
@@ -260,11 +373,11 @@ function newChallenge() {
   if (monoKeys.length && Math.random() < MONO_CHANCE) {
     const t = monoKeys[Math.floor(Math.random() * monoKeys.length)];
     types = [t];
-    answers = new Set(monos[t]);
+    answers = new Set(monos[t].filter(inGen));
   } else {
     const key = comboKeys[Math.floor(Math.random() * comboKeys.length)];
     types = key.split("|");
-    answers = new Set(combos[key]);
+    answers = new Set(combos[key].filter(inGen));
   }
   current = { types, answers };
 
@@ -349,14 +462,30 @@ function hidePopup() {
   ov.innerHTML = "";
 }
 
+// Does `name` have exactly the challenge's typing (ignoring the gen filter)?
+function matchesChallengeTyping(name) {
+  const t = pokemonToTypes[name];
+  if (!t) return false;
+  const cur = current.types;
+  if (cur.length === 1) return t.length === 1 && t[0] === cur[0];
+  return t.length === 2 &&
+    [...t].sort().join("|") === [...cur].sort().join("|");
+}
+
 function onWrong(name) {
   // wrong guess breaks nothing yet — just inform + add side card
   streak = 0;
   setStreak(0);
   addWrongCard(name);
-  const msg = current.types.length === 1
-    ? `${nameDisplay[name]} isn't a pure ${titleCase(current.types[0])} type. Try again!`
-    : `${nameDisplay[name]} isn't both of those types. Try again!`;
+  let msg;
+  if (selectedGens && !inGen(name) && matchesChallengeTyping(name)) {
+    // Right typing, but excluded by the generation filter.
+    msg = `${nameDisplay[name]} has the right typing, but it's a Gen ${pokemonGen[name]} Pokémon. Try again!`;
+  } else {
+    msg = current.types.length === 1
+      ? `${nameDisplay[name]} isn't a pure ${titleCase(current.types[0])} type. Try again!`
+      : `${nameDisplay[name]} isn't both of those types. Try again!`;
+  }
   showInline(msg, true);
 }
 
@@ -568,15 +697,13 @@ function attachEvents() {
     const data = await loadData();
     pokemonToTypes = data.pokemonToTypes;
     pokemonId = data.pokemonId;
+    selectedGens = loadGens();
     buildIndexes();
+    renderGenToggle();
     attachEvents();
     showScreen("solo");
     newChallenge();
     $("loader").classList.add("hide");
-    // Let the multiplayer module know the Pokémon indexes are ready.
-    // Leave a flag too: on the cached path this callback can fire in the
-    // microtask gap *before* multiplayer.js has run and defined onDataReady,
-    // so the flag lets that script catch up when it loads.
     window.pkmnDataReady = true;
     window.onDataReady?.();
   } catch (err) {

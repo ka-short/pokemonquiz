@@ -161,6 +161,49 @@ body::after {
 .layout { margin-top: 16px; margin-bottom: 40px; }
 .game { padding: 30px 28px; text-align: center; }
 
+/* ============ Generation filter ============ */
+.gen-filter {
+  margin: 0 0 22px;
+  padding-bottom: 16px;
+  border-bottom: 3px dashed rgba(244, 231, 205, 0.18);
+}
+.gen-filter-label {
+  display: block;
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--lcd-dim);
+  margin-bottom: 10px;
+}
+.gen-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.gen-chip {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  padding: 8px 9px;
+  color: var(--lcd-dim);
+  background: var(--ink-soft);
+  border: 3px solid var(--ink);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: transform 0.05s ease;
+}
+.gen-chip:hover { color: var(--lcd); }
+.gen-chip:active { transform: translateY(1px); }
+.gen-chip.on {
+  color: #fff;
+  background: var(--red);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.22);
+}
+.gen-chip.all.on {
+  background: var(--good);
+  color: var(--ink);
+}
+
 .prompt {
   font-size: 24px;
   color: var(--lcd);
