@@ -6,6 +6,12 @@
   <title>Dual Type Pokémon Quiz</title>
   <link rel="preconnect" href="https://pokeapi.co" />
   <link rel="preconnect" href="https://raw.githubusercontent.com" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap"
+    rel="stylesheet"
+  />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -16,6 +22,12 @@
   </div>
 
   <header class="topbar">
+    <div class="dex-lights">
+      <span class="lens"></span>
+      <span class="light on"></span>
+      <span class="light"></span>
+      <span class="light"></span>
+    </div>
     <h1>Dual&nbsp;Type Quiz</h1>
     <div class="streaks">
       <div class="streak-box">
@@ -61,6 +73,9 @@
       <div id="wrong-list" class="wrong-list"></div>
     </aside>
   </main>
+
+  <!-- Result pop-up (Correct! / Answers) floats over the UI -->
+  <div id="overlay" class="overlay" hidden></div>
 
   <footer class="credit">
     Data &amp; sprites from <a href="https://pokeapi.co" target="_blank" rel="noopener">PokéAPI</a>.

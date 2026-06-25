@@ -19,23 +19,15 @@ const SPRITE = (id) =>
 const TYPE_IMG = (name) =>
   `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/types/generation-viii/sword-shield/${TYPE_IDS[name]}.png`;
 
-const MIN_ANSWERS = 2;          // combos must have at least this many valid Pokémon
+const MIN_ANSWERS = 1;          // combos must have at least this many valid Pokémon
 const CACHE_KEY = "pkmn-dual-data-v3";
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
 
-// Forms with id >= 10000 are alternate forms. We include regional forms (Alolan/
-// Galarian/Hisuian/Paldean) and every Mega / Primal. Note: Pokémon Legends: Z-A
-// (2025) made nearly all Mega Evolutions canon — including the Johto starters
-// (Mega Meganium etc.) and "Mega X/Y/Z" variants — so a simple Mega/Primal rule
-// is now correct. We skip only purely cosmetic forms (sizes, colors, builds,
-// Gigantamax, totem duplicates), which never change typing.
+// Forms with id >= 10000 are alternate forms. We include regional forms (Alolan etc)
 const REGION_TAGS = ["alola", "galar", "hisui", "paldea"];
 const REGION_LABELS = { alola: "Alolan", galar: "Galarian", hisui: "Hisuian", paldea: "Paldean" };
 
-// Notable signature / battle forms (beyond regional + mega/primal). Many change
-// typing (Rotom appliances, Wormadam, Darmanitan Zen, Calyrex, Crowned Zacian…);
-// a few keep their typing but are iconic alternate forms worth including. Pure
-// cosmetic variants (colors, sizes, costumes, builds, Gigantamax) are left out.
+// Notable signature / battle forms (beyond regional + mega/primal). Many change their typinng
 const NOTABLE_FORMS = new Set([
   "rotom-heat", "rotom-wash", "rotom-frost", "rotom-fan", "rotom-mow",
   "wormadam-sandy", "wormadam-trash",
@@ -56,10 +48,10 @@ const NOTABLE_FORMS = new Set([
 
 function isIncluded(name, id) {
   if (id < 10000) return true;              // base species
-  if (name.includes("totem")) return false; // cosmetic totem duplicates
+  if (name.includes("totem")) return false; 
   if (NOTABLE_FORMS.has(name)) return true;
   const parts = name.split("-");
-  if (parts.includes("mega") || parts.includes("primal")) return true; // all canon
+  if (parts.includes("mega") || parts.includes("primal")) return true;
   return REGION_TAGS.some((r) => parts.includes(r));
 }
 
@@ -82,8 +74,7 @@ const titleCase = (s) =>
   s.split(/[-\s]/).filter(Boolean)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 
-// Turn an API name into a human label: "growlithe-hisui" -> "Hisuian Growlithe",
-// "charizard-mega-x" -> "Mega Charizard X", "groudon-primal" -> "Primal Groudon".
+// Turn an API name into a human label.
 function displayName(name) {
   const parts = name.split("-");
   if (parts.includes("primal")) {
@@ -245,6 +236,7 @@ function newChallenge() {
   input.value = "";
   input.disabled = false;
   $("feedback").innerHTML = "";
+  hidePopup();
   hideSuggestions();
   input.focus();
 }
@@ -288,8 +280,19 @@ function onCorrect(name) {
   next.textContent = "Next →";
   next.onclick = newChallenge;
   card.appendChild(next);
-  fb.appendChild(card);
-  next.focus();
+  showPopup(card);
+}
+
+function showPopup(card) {
+  const ov = $("overlay");
+  ov.innerHTML = "";
+  ov.appendChild(card);
+  ov.hidden = false;
+}
+function hidePopup() {
+  const ov = $("overlay");
+  ov.hidden = true;
+  ov.innerHTML = "";
 }
 
 function onWrong(name) {
@@ -324,6 +327,7 @@ function addWrongCard(name) {
   card.className = "wrong-card";
   card.dataset.name = name;
   card.innerHTML = `
+    <button class="wrong-close" type="button" aria-label="Dismiss" title="Dismiss">X</button>
     <img src="${SPRITE(pokemonId[name])}" alt="${name}" />
     <div>
       <div class="wc-name">${nameDisplay[name]}</div>
@@ -331,6 +335,10 @@ function addWrongCard(name) {
         ${types.map((t) => `<span class="mini-type" style="background:${TYPE_COLORS[t]}">${t}</span>`).join("")}
       </div>
     </div>`;
+  card.querySelector(".wrong-close").addEventListener("click", () => {
+    card.remove();
+    if (!list.children.length) $("sidebar-hint").style.display = "";
+  });
   list.prepend(card);
 }
 
@@ -358,8 +366,7 @@ function giveUp() {
   next.textContent = "Next →";
   next.onclick = newChallenge;
   card.appendChild(next);
-  fb.appendChild(card);
-  next.focus();
+  showPopup(card);
 }
 
 /* ====== Autocomplete ====== */
@@ -445,11 +452,29 @@ function attachEvents() {
     else if (e.key === "ArrowUp") { e.preventDefault(); moveSuggestion(-1); }
     else if (e.key === "Escape") { hideSuggestions(); }
     else if (e.key === "Enter") {
-      if (open && activeSuggestion >= 0) {
-        const li = $("suggestions").querySelectorAll("li")[activeSuggestion];
-        input.value = nameDisplay[li.dataset.name];
+      // Adopt the highlighted suggestion, or the first one if none is highlighted,
+      // so typing "luca" + Enter submits "Lucario" rather than the raw text.
+      if (open) {
+        const items = $("suggestions").querySelectorAll("li");
+        if (items.length) {
+          const idx = activeSuggestion >= 0 ? activeSuggestion : 0;
+          input.value = nameDisplay[items[idx].dataset.name];
+        }
       }
+      // Don't let this same Enter bubble to the popup's advance handler
+      // (that would instantly skip the Correct! popup we're about to open).
+      e.preventDefault();
+      e.stopPropagation();
       submitGuess();
+    }
+  });
+
+  // While a result popup is open, Enter / Space advances to the next challenge.
+  document.addEventListener("keydown", (e) => {
+    if ($("overlay").hidden) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      newChallenge();
     }
   });
 }
