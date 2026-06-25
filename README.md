@@ -27,21 +27,6 @@ builds a `Pokémon → types` map plus the set of valid dual-type combinations, 
 caches the result in `localStorage` for 24h. Type badge images and Pokémon
 sprites come from the [PokéAPI sprites](https://github.com/PokeAPI/sprites) repo.
 
-## Run locally
-
-Just open `index.html` in a browser. Or serve it:
-
-```bash
-python -m http.server 8000
-# visit http://localhost:8000
-```
-
-## Files
-
-- `index.html` — markup
-- `styles.css` — styling
-- `app.js` — game logic
-
 ## Credits
 
 Data & sprites from [PokéAPI](https://pokeapi.co). This is a fan project and is

@@ -29,6 +29,7 @@
       <span class="light"></span>
     </div>
     <h1>Dual&nbsp;Type Quiz</h1>
+    <button id="to-duel" class="btn ghost dexbtn">⚔ Duel a friend</button>
     <div class="streaks">
       <div class="streak-box">
         <span class="streak-num" id="streak">0</span>
@@ -41,46 +42,154 @@
     </div>
   </header>
 
-  <main class="layout">
-    <section class="game">
-      <p class="prompt">Name a Pokémon that is <strong>both</strong> of these types:</p>
+  <main id="main">
+    <!-- ============ SOLO ============ -->
+    <div id="screen-solo" class="screen layout">
+      <section class="game">
+        <p class="prompt">Name a Pokémon that is <strong>both</strong> of these types:</p>
 
-      <div class="types" id="types"></div>
+        <div class="types" id="types"></div>
 
-      <div class="input-wrap">
-        <input
-          id="guess"
-          type="text"
-          autocomplete="off"
-          spellcheck="false"
-          placeholder="Type a Pokémon name…"
-        />
-        <ul id="suggestions" class="suggestions" hidden></ul>
-      </div>
+        <div id="solo-input-slot">
+          <div class="input-wrap" id="input-wrap">
+            <input
+              id="guess"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="Type a Pokémon name…"
+            />
+            <ul id="suggestions" class="suggestions" hidden></ul>
+          </div>
+        </div>
 
-      <div class="buttons">
-        <button id="submit" class="btn primary">Guess</button>
-        <button id="skip" class="btn ghost">Skip</button>
-        <button id="giveup" class="btn ghost">Give&nbsp;up</button>
-      </div>
+        <div class="buttons">
+          <button id="submit" class="btn primary">Guess</button>
+          <button id="skip" class="btn ghost">Skip</button>
+          <button id="giveup" class="btn ghost">Give&nbsp;up</button>
+        </div>
 
-      <div id="feedback" class="feedback"></div>
-    </section>
+        <div id="feedback" class="feedback"></div>
+      </section>
 
-    <aside class="sidebar">
-      <h2>Wrong guesses</h2>
-      <p class="sidebar-hint" id="sidebar-hint">Miss a guess and its real typing shows up here.</p>
-      <div id="wrong-list" class="wrong-list"></div>
-    </aside>
+      <aside class="sidebar">
+        <h2>Wrong guesses</h2>
+        <p class="sidebar-hint" id="sidebar-hint">Miss a guess and its real typing shows up here.</p>
+        <div id="wrong-list" class="wrong-list"></div>
+      </aside>
+    </div>
+
+    <!-- ============ SETUP ============ -->
+    <div id="screen-setup" class="screen" hidden>
+      <section class="game panel">
+        <h2 class="screen-title">Type Duel</h2>
+        <p class="screen-sub">Pick a type each, then race to name a Pokémon with the combined typing.</p>
+
+        <div class="field">
+          <label for="mp-name">Your name</label>
+          <input id="mp-name" type="text" maxlength="16" placeholder="Trainer" />
+        </div>
+
+        <div class="field">
+          <label>Mode</label>
+          <div class="seg" id="mp-mode">
+            <button type="button" class="seg-btn active" data-mode="casual">Casual</button>
+            <button type="button" class="seg-btn" data-mode="competition">Competition</button>
+          </div>
+        </div>
+
+        <div class="field" id="mp-target-field" hidden>
+          <label for="mp-target">First to (points)</label>
+          <input id="mp-target" type="number" min="1" max="20" value="5" />
+        </div>
+
+        <div class="setup-actions">
+          <button id="mp-host" class="btn primary">Create lobby</button>
+          <div class="or">— or —</div>
+          <div class="join-row">
+            <input id="mp-code" type="text" maxlength="5" placeholder="CODE" autocapitalize="characters" />
+            <button id="mp-join" class="btn">Join</button>
+          </div>
+        </div>
+
+        <p id="setup-msg" class="screen-msg"></p>
+        <button id="setup-back" class="btn ghost small">← Back to solo</button>
+      </section>
+    </div>
+
+    <!-- ============ LOBBY ============ -->
+    <div id="screen-lobby" class="screen" hidden>
+      <section class="game panel">
+        <h2 class="screen-title">Lobby</h2>
+
+        <div id="lobby-code-wrap" class="code-display">
+          <span class="code-label">Lobby code</span>
+          <span id="lobby-code" class="code-value">—</span>
+        </div>
+
+        <div class="lobby-players">
+          <div class="lobby-player">
+            <span class="lp-role">Host</span>
+            <span id="lobby-host" class="lp-name">—</span>
+          </div>
+          <div class="lobby-vs">VS</div>
+          <div class="lobby-player">
+            <span class="lp-role">Guest</span>
+            <span id="lobby-guest" class="lp-name">…waiting</span>
+          </div>
+        </div>
+
+        <p id="lobby-mode" class="lobby-mode"></p>
+        <p id="lobby-msg" class="screen-msg"></p>
+
+        <div class="setup-actions">
+          <button id="lobby-start" class="btn primary" disabled>Start</button>
+          <button id="lobby-leave" class="btn ghost small">Leave</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- ============ PICK ============ -->
+    <div id="screen-pick" class="screen" hidden>
+      <section class="game panel">
+        <div class="scorebar" id="scorebar-pick"></div>
+        <h2 class="screen-title">Pick your type</h2>
+        <p class="screen-sub">Your opponent can't see your pick. Choose the same type as them and it becomes a pure (mono) typing!</p>
+        <div id="type-grid" class="type-grid"></div>
+        <p id="pick-status" class="screen-msg"></p>
+        <div class="setup-actions">
+          <button id="pick-lock" class="btn primary" disabled>Lock in</button>
+          <button id="pick-leave" class="btn ghost small">Leave</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- ============ DUEL ============ -->
+    <div id="screen-duel" class="screen" hidden>
+      <section class="game panel duel-arena">
+        <div class="scorebar" id="scorebar-duel"></div>
+        <div id="countdown" class="countdown" hidden></div>
+        <p class="prompt">Name a Pokémon with <strong>this</strong> typing:</p>
+        <div class="types" id="duel-types"></div>
+        <div id="duel-input-slot"></div>
+        <div class="buttons">
+          <button id="duel-submit" class="btn primary">Guess</button>
+        </div>
+        <div id="duel-feedback" class="feedback"></div>
+        <button id="duel-leave" class="btn ghost small">Leave</button>
+      </section>
+    </div>
   </main>
 
-  <!-- Result pop-up (Correct! / Answers) floats over the UI -->
+  <!-- Result pop-up (Correct! / Answers / round result) floats over the UI -->
   <div id="overlay" class="overlay" hidden></div>
 
   <footer class="credit">
     Data &amp; sprites from <a href="https://pokeapi.co" target="_blank" rel="noopener">PokéAPI</a>.
   </footer>
 
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script src="app.js"></script>
+  <script src="multiplayer.js"></script>
 </body>
 </html>

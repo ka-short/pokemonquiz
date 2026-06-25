@@ -62,10 +62,12 @@ let simpleToName = {};    // normalized alias -> canonical name
 let nameDisplay = {};     // canonical name -> pretty display label
 let searchItems = [];     // [{ name, display, id, types, keys }] for autocomplete
 let combos = {};          // "typeA|typeB" -> [names]
+let monos = {};           // type -> [names] for pure single-type Pokémon
 let comboKeys = [];       // playable combo keys
 let current = null;       // { types: [a,b], answers: Set }
 let answered = false;     // locked until "Next"
 let activeSuggestion = -1;
+let gameMode = "solo";    // "solo" | "duel" | "mp" (lobby/setup/pick screens)
 
 /* ====== Helpers ====== */
 const $ = (id) => document.getElementById(id);
@@ -179,12 +181,23 @@ function buildIndexes() {
   });
 
   combos = {};
+  monos = {};
   for (const [name, types] of Object.entries(pokemonToTypes)) {
-    if (types.length !== 2) continue;
-    const key = [...types].sort().join("|");
-    (combos[key] = combos[key] || []).push(name);
+    if (types.length === 1) {
+      (monos[types[0]] = monos[types[0]] || []).push(name);
+    } else if (types.length === 2) {
+      const key = [...types].sort().join("|");
+      (combos[key] = combos[key] || []).push(name);
+    }
   }
   comboKeys = Object.keys(combos).filter((k) => combos[k].length >= MIN_ANSWERS);
+}
+
+// Pokémon whose typing is exactly {a, b} — or exactly {a} when a === b (pure mono).
+// Used by both the validity check and the answer set for a duel round.
+function answersFor(a, b) {
+  if (a === b) return monos[a] || [];
+  return combos[[a, b].sort().join("|")] || [];
 }
 
 /* ====== Streak ====== */
@@ -201,21 +214,15 @@ function setStreak(n) {
 let streak = 0;
 
 /* ====== Game flow ====== */
-function newChallenge() {
-  answered = false;
-  const key = comboKeys[Math.floor(Math.random() * comboKeys.length)];
-  const types = key.split("|");
-  current = { types, answers: new Set(combos[key]) };
-
-  // render type cards
-  const wrap = $("types");
-  wrap.innerHTML = "";
+// Render the "Type + Type" (or single Type) challenge cards into a container.
+function renderTypes(container, types) {
+  container.innerHTML = "";
   types.forEach((t, i) => {
     if (i > 0) {
       const plus = document.createElement("span");
       plus.className = "type-plus";
       plus.textContent = "+";
-      wrap.appendChild(plus);
+      container.appendChild(plus);
     }
     const card = document.createElement("div");
     card.className = "type-card";
@@ -228,8 +235,17 @@ function newChallenge() {
     label.className = "type-name";
     label.textContent = t;
     card.append(img, label);
-    wrap.appendChild(card);
+    container.appendChild(card);
   });
+}
+
+function newChallenge() {
+  answered = false;
+  const key = comboKeys[Math.floor(Math.random() * comboKeys.length)];
+  const types = key.split("|");
+  current = { types, answers: new Set(combos[key]) };
+
+  renderTypes($("types"), types);
 
   // reset input
   const input = $("guess");
@@ -241,19 +257,33 @@ function newChallenge() {
   input.focus();
 }
 
+// Normalize raw user text to a canonical Pokémon name (or undefined if unknown).
+function resolveName(raw) {
+  return simpleToName[norm(raw)];
+}
+// Is `name` a valid answer for the given answers Set?
+function isCorrect(name, answersSet) {
+  return answersSet.has(name);
+}
+
 function submitGuess() {
   if (answered) return;
   const raw = $("guess").value.trim();
   if (!raw) return;
   hideSuggestions();
 
-  const name = simpleToName[norm(raw)];
+  // In a duel, hand off to the multiplayer module (its own validation + netcode).
+  if (gameMode === "duel") {
+    window.Duel?.submit(raw);
+    return;
+  }
+
+  const name = resolveName(raw);
   if (!name) {
     showInline(`"${raw}" isn't a Pokémon I recognize.`);
     return;
   }
-
-  if (current.answers.has(name)) {
+  if (isCorrect(name, current.answers)) {
     onCorrect(name);
   } else {
     onWrong(name);
@@ -435,6 +465,29 @@ function shade(hex, percent) {
   return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
 }
 
+/* ====== Screens ====== */
+const SCREENS = ["solo", "setup", "lobby", "pick", "duel"];
+function showScreen(name) {
+  SCREENS.forEach((s) => {
+    const el = $("screen-" + s);
+    if (el) el.hidden = s !== name;
+  });
+  const duelBtn = $("to-duel");
+  if (duelBtn) duelBtn.hidden = name !== "solo";
+  const streaks = document.querySelector(".streaks");
+  if (streaks) streaks.hidden = name !== "solo";
+  gameMode = name === "solo" ? "solo" : name === "duel" ? "duel" : "mp";
+  // The guess input + autocomplete is one shared element; move it to the active
+  // screen so its listeners (autocomplete, Enter handling) keep working as-is.
+  if (name === "duel") moveInput("duel-input-slot");
+  else if (name === "solo") moveInput("solo-input-slot");
+}
+function moveInput(slotId) {
+  const slot = $(slotId);
+  const wrap = $("input-wrap");
+  if (slot && wrap && wrap.parentNode !== slot) slot.appendChild(wrap);
+}
+
 /* ====== Wire up ====== */
 function attachEvents() {
   $("submit").onclick = submitGuess;
@@ -469,8 +522,10 @@ function attachEvents() {
     }
   });
 
-  // While a result popup is open, Enter / Space advances to the next challenge.
+  // While a SOLO result popup is open, Enter / Space advances to the next
+  // challenge. In a duel the host controls advancing, so don't hijack keys.
   document.addEventListener("keydown", (e) => {
+    if (gameMode !== "solo") return;
     if ($("overlay").hidden) return;
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
@@ -488,8 +543,11 @@ function attachEvents() {
     pokemonId = data.pokemonId;
     buildIndexes();
     attachEvents();
+    showScreen("solo");
     newChallenge();
     $("loader").classList.add("hide");
+    // Let the multiplayer module know the Pokémon indexes are ready.
+    window.onDataReady?.();
   } catch (err) {
     $("loader-text").textContent = "Couldn't load Pokémon data. Check your connection and refresh.";
     console.error(err);
